@@ -546,7 +546,7 @@ BEGIN
         RETURN 'success';
     END IF;
 
-    raise exception '% has not access to that table or database. You might have to create the database first.', usr;
+    raise exception '% has not access to the collection ' || collection || '.', usr;
 END
 $BODY$;
 
@@ -561,8 +561,22 @@ CREATE OR REPLACE FUNCTION public.geodb_publish_collection(
     VOLATILE
 AS
 $BODY$
+DECLARE
+    allowed INT;
+    usr     TEXT;
+    qry     TEXT;
 BEGIN
-    EXECUTE format('GRANT SELECT ON TABLE %I TO PUBLIC;', collection);
+    usr := (SELECT geodb_whoami());
+
+    qry := 'SELECT geodb_user_allowed(''' || new_name || ''',''' || usr || ''')';
+
+    EXECUTE qry INTO allowed;
+
+    IF allowed = 1 THEN
+        EXECUTE format('GRANT SELECT ON TABLE %I TO PUBLIC;', collection);
+    END IF;
+
+    raise exception '% has not access to the collection ' || collection || '.', usr;
 END
 $BODY$;
 
@@ -576,9 +590,22 @@ CREATE OR REPLACE FUNCTION public.geodb_unpublish_collection(
     VOLATILE
 AS
 $BODY$
+DECLARE
+    allowed INT;
+    usr     TEXT;
+    qry     TEXT;
 BEGIN
-    EXECUTE format('REVOKE SELECT ON TABLE %I FROM PUBLIC;', collection);
+    usr := (SELECT geodb_whoami());
 
+    qry := 'SELECT geodb_user_allowed(''' || new_name || ''',''' || usr || ''')';
+
+    EXECUTE qry INTO allowed;
+
+    IF allowed = 1 THEN
+        EXECUTE format('REVOKE SELECT ON TABLE %I FROM PUBLIC;', collection);
+    END IF;
+
+    raise exception '% has not access to the collection ' || collection || '.', usr;
 END
 $BODY$;
 
