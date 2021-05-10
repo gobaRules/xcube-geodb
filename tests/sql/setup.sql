@@ -24,7 +24,7 @@ ALTER ROLE authenticator IN DATABASE postgres SET search_path TO public;
 ALTER ROLE geodb_admin IN DATABASE postgres SET search_path TO public;
 GRANT geodb_admin TO authenticator;
 
-CREATE ROLE "geodb_9bfgsdfg-453f-445b-a459-osdvjosdvjva" WITH
+CREATE ROLE "geodb_9bfgsdfg-453f-445b-a459" WITH
     LOGIN
     NOSUPERUSER
     INHERIT
@@ -32,11 +32,25 @@ CREATE ROLE "geodb_9bfgsdfg-453f-445b-a459-osdvjosdvjva" WITH
     NOCREATEROLE
     NOREPLICATION;
 
-GRANT "geodb_9bfgsdfg-453f-445b-a459-osdvjosdvjva" TO postgres;
-GRANT "geodb_9bfgsdfg-453f-445b-a459-osdvjosdvjva" TO authenticator;
+GRANT "geodb_9bfgsdfg-453f-445b-a459" TO postgres;
+GRANT "geodb_9bfgsdfg-453f-445b-a459" TO authenticator;
 
-GRANT INSERT, SELECT, UPDATE, DELETE ON TABLE public.geodb_user_databases TO "geodb_9bfgsdfg-453f-445b-a459-osdvjosdvjva";
-GRANT SELECT, UPDATE, USAGE ON SEQUENCE public.geodb_user_databases_seq TO "geodb_9bfgsdfg-453f-445b-a459-osdvjosdvjva";
+GRANT INSERT, SELECT, UPDATE, DELETE ON TABLE public.geodb_user_databases TO "geodb_9bfgsdfg-453f-445b-a459";
+GRANT SELECT, UPDATE, USAGE ON SEQUENCE public.geodb_user_databases_seq TO "geodb_9bfgsdfg-453f-445b-a459";
+
+INSERT INTO geodb_user_databases(name, owner) VALUES('geodb_9bfgsdfg-453f-445b-a459', 'geodb_9bfgsdfg-453f-445b-a459');
+
+
+CREATE ROLE "geodb_not_allowed" WITH
+    LOGIN
+    NOSUPERUSER
+    INHERIT
+    NOCREATEDB
+    NOCREATEROLE
+    NOREPLICATION;
+
+GRANT "geodb_not_allowed" TO authenticator;
+
 
 CREATE TABLE public.postgres_land_use
 (
@@ -61,7 +75,7 @@ CREATE TABLE public."geodb_9bfgsdfg-453f-445b-a459_land_use"
 
 
 ALTER TABLE public."geodb_9bfgsdfg-453f-445b-a459_land_use"
-    OWNER to "geodb_9bfgsdfg-453f-445b-a459-osdvjosdvjva";
+    OWNER to "geodb_9bfgsdfg-453f-445b-a459";
 
 
 INSERT INTO "geodb_9bfgsdfg-453f-445b-a459_land_use"(id, geometry)
@@ -72,12 +86,12 @@ INSERT INTO public."geodb_9bfgsdfg-453f-445b-a459_land_use"(id, geometry)
 VALUES (2, '0103000020D20E00000100000005000000508D976EFF97184125068195F771F240D9CEF753F6961841621058395E72F240D9CEF753F696184114AE47E1FC72F2402731082C01981841FA7E6ABCA872F240508D976EFF97184125068195F771F240');
 
 
-CREATE TABLE public."geodb_9bfgsdfg-453f-445b-a459-osdvjosdvjva_tt"
+CREATE TABLE public."geodb_9bfgsdfg-453f-445b-a459_tt"
 (
     id       SERIAL PRIMARY KEY,
     geometry geometry(Geometry, 3794) NOT NULL
 );
 
 
-ALTER TABLE public."geodb_9bfgsdfg-453f-445b-a459-osdvjosdvjva_tt"
-    OWNER to "geodb_9bfgsdfg-453f-445b-a459-osdvjosdvjva";
+ALTER TABLE public."geodb_9bfgsdfg-453f-445b-a459_tt"
+    OWNER to "geodb_9bfgsdfg-453f-445b-a459";

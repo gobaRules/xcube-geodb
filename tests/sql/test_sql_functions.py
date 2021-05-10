@@ -2,6 +2,8 @@ import os
 import unittest
 import json
 
+import psycopg2
+
 
 GEODB_EXT_INSTALLED = False
 
@@ -30,7 +32,8 @@ def make_install_geodb():
 
 
 # noinspection SqlNoDataSourceInspection
-@unittest.skipIf(os.environ.get('SKIP_PSQL_TESTS', '1') == '1', 'DB Tests skipped')
+# @unittest.skipIf(os.environ.get('SKIP_PSQL_TESTS', '1') == '1', 'DB Tests skipped')
+# noinspection SqlInjection,SqlResolve
 class GeoDBSqlTest(unittest.TestCase):
 
     @classmethod
@@ -42,8 +45,8 @@ class GeoDBSqlTest(unittest.TestCase):
         postgresql = testing.postgresql.PostgresqlFactory(cache_initialized_db=False)
 
         cls._postgresql = postgresql()
-        conn = psycopg2.connect(**cls._postgresql.dsn())
-        cls._cursor = conn.cursor()
+        cls._conn = psycopg2.connect(**cls._postgresql.dsn())
+        cls._cursor = cls._conn.cursor()
         app_path = get_app_dir()
         fn = os.path.join(app_path, '..', 'tests', 'sql', 'setup.sql')
         with open(fn) as sql_file:
@@ -108,12 +111,12 @@ class GeoDBSqlTest(unittest.TestCase):
         self._cursor.execute(sql)
 
     def test_manage_table(self):
-        user_name = "geodb_9bfgsdfg-453f-445b-a459-osdvjosdvjva"
-        user_table = "test"
+        user_name = "geodb_9bfgsdfg-453f-445b-a459"
+        user_table = f"{user_name}_test"
         self._set_role(user_name)
 
         props = {'tt': 'integer'}
-        sql = f"SELECT geodb_create_collection('test', '{json.dumps(props)}', '4326')"
+        sql = f"SELECT geodb_create_collection('{user_table}', '{json.dumps(props)}', '4326')"
         self._cursor.execute(sql)
 
         self.assertTrue(self.table_exists(user_table))
@@ -121,8 +124,8 @@ class GeoDBSqlTest(unittest.TestCase):
         self.assertTrue(self.column_exists(user_table, 'id', 'integer'))
         self.assertTrue(self.column_exists(user_table, 'geometry', 'USER-DEFINED'))
 
-        datasets = {'tt1': {'crs': '4326', 'properties': {'tt': 'integer'}},
-                    'tt2': {'crs': '4326', 'properties': {'tt': 'integer'}}}
+        datasets = {f'{user_name}_tt1': {'crs': '4326', 'properties': {'tt': 'integer'}},
+                    f'{user_name}_tt2': {'crs': '4326', 'properties': {'tt': 'integer'}}}
 
         sql = f"SELECT geodb_create_collections('{json.dumps(datasets)}')"
         self._cursor.execute(sql)
@@ -132,18 +135,20 @@ class GeoDBSqlTest(unittest.TestCase):
         self.assertTrue(self.column_exists(user_table, 'id', 'integer'))
         self.assertTrue(self.column_exists(user_table, 'geometry', 'USER-DEFINED'))
 
-        datasets = ['test', 'tt1', 'tt2']
+        datasets = [user_table, f'{user_name}_tt1', f'{user_name}_tt2']
         sql = f"SELECT geodb_drop_collections('{json.dumps(datasets)}')"
         self._cursor.execute(sql)
         self.assertFalse(self.table_exists(user_table))
+        self.assertFalse(self.table_exists(f'{user_name}_tt1'))
+        self.assertFalse(self.table_exists(f'{user_name}_tt2'))
 
     def test_manage_properties(self):
-        user_name = "geodb_9bfgsdfg-453f-445b-a459-osdvjosdvjva"
-        table = "land_use"
+        user_name = "geodb_9bfgsdfg-453f-445b-a459"
+        table = f"{user_name}_dummest"
         self._set_role(user_name)
 
         props = {'tt': 'integer'}
-        sql = f"SELECT geodb_create_collection('land_use', '{json.dumps(props)}', '4326')"
+        sql = f"SELECT geodb_create_collection('{table}', '{json.dumps(props)}', '4326')"
         self._cursor.execute(sql)
 
         cols = {'test_col1': 'integer', 'test_col2': 'integer'}
@@ -159,37 +164,25 @@ class GeoDBSqlTest(unittest.TestCase):
         self._cursor.execute(sql)
         self.assertFalse(self.column_exists(table, 'test_col', 'integer'))
 
-    def test_manage_users(self):
-        sql = f"SELECT public.geodb_register_user('test', 'test')"
-        self._cursor.execute(sql)
-
-        sql = f"SELECT public.geodb_user_exists('test')"
-        self._cursor.execute(sql)
-
-        sql = f"SELECT public.geodb_drop_user('test')"
-        r = self._cursor.execute(sql)
-
-        print(r)
-
     def test_get_my_usage(self):
-        user_name = "geodb_9bfgsdfg-453f-445b-a459-osdvjosdvjva"
+        user_name = "geodb_9bfgsdfg-453f-445b-a459"
         self._set_role(user_name)
 
+        qry = "SELECT geodb_user_allowed('geodb_9bfgsdfg-453f-445b-a459_test_usage', 'geodb_9bfgsdfg-453f-445b-a459');"
+        self._cursor.execute(qry)
+        res = self._cursor.fetchone()
+
         props = {'tt': 'integer'}
-        sql = f"SELECT geodb_create_collection('test_usage', '{json.dumps(props)}', '4326')"
+        sql = f"SELECT geodb_create_collection('geodb_9bfgsdfg-453f-445b-a459_test_usage', '{json.dumps(props)}', '4326')"
         self._cursor.execute(sql)
 
         sql = f"SELECT public.geodb_get_my_usage()"
         self._cursor.execute(sql)
-        self._cursor.fetchone()
-
-        sql = f"SELECT current_user"
-        self._cursor.execute(sql)
         res = self._cursor.fetchone()
-        print(res)
+        self.assertEqual(([{'usage': None}],), res)
 
     def test_create_database(self):
-        user_name = "geodb_9bfgsdfg-453f-445b-a459-osdvjosdvjva"
+        user_name = "geodb_9bfgsdfg-453f-445b-a459"
         self._set_role(user_name)
 
         sql = f"SELECT geodb_create_database('test')"
@@ -205,7 +198,7 @@ class GeoDBSqlTest(unittest.TestCase):
         self.assertEqual(user_name, res[2])
 
     def test_truncate_database(self):
-        user_name = "geodb_9bfgsdfg-453f-445b-a459-osdvjosdvjva"
+        user_name = "geodb_9bfgsdfg-453f-445b-a459"
         self._set_role(user_name)
 
         sql = f"INSERT INTO geodb_user_databases(name, owner) VALUES('test_truncate', '{user_name}')"
@@ -220,12 +213,72 @@ class GeoDBSqlTest(unittest.TestCase):
 
         self.assertEqual(0, len(res))
 
-    def test_grant_access(self):
-        user_name = "geodb_9bfgsdfg-453f-445b-a459-osdvjosdvjva"
+    def test_grant_access_refused(self):
+        self._set_role('geodb_not_allowed')
+        sql = 'SELECT * FROM "geodb_9bfgsdfg-453f-445b-a459_land_use"'
+
+        # noinspection PyUnresolvedReferences
+        with self.assertRaises(psycopg2.errors.InsufficientPrivilege) as e:
+            self._cursor.execute(sql)
+
+        self.assertIn('permission denied', e.exception.pgerror)
+        self.assertEqual('42501', e.exception.pgcode)
+
+    def test_grant_access_success(self):
+        user_name = "geodb_9bfgsdfg-453f-445b-a459"
         self._set_role(user_name)
 
         sql = "SELECT geodb_grant_access_to_collection('geodb_9bfgsdfg-453f-445b-a459_land_use', 'public')"
         self._cursor.execute(sql)
 
+        self._set_role('geodb_not_allowed')
+        sql = 'SELECT * FROM "geodb_9bfgsdfg-453f-445b-a459_land_use"'
+
+        self._cursor.execute(sql)
+        res = self._cursor.fetchall()
+
+        self.assertEqual(2, len(res))
+
+    def test_publish_collection(self):
+        user_name = "geodb_9bfgsdfg-453f-445b-a459"
+        self._set_role(user_name)
+
+        sql = f"SELECT geodb_publish_collection('{user_name}_land_use')"
+
+        self._cursor.execute(sql)
+        res = self._cursor.fetchone()
+        self.assertTrue(res)
+
+        self._set_role("geodb_not_allowed")
+
+        sql = f"SELECT geodb_publish_collection('{user_name}_land_use')"
+
+        # noinspection PyUnresolvedReferences
+        with self.assertRaises(psycopg2.errors.InsufficientPrivilege) as e:
+            self._cursor.execute(sql)
+
+        self.assertTrue("permission denied for table geodb_user_databases" in e.exception.pgerror)
+        self.assertEqual('42501', e.exception.pgcode)
+
+    def test_unpublish_collection(self):
+        user_name = "geodb_9bfgsdfg-453f-445b-a459"
+        self._set_role(user_name)
+
+        sql = f"SELECT geodb_unpublish_collection('{user_name}_land_use')"
+
+        self._cursor.execute(sql)
+        res = self._cursor.fetchone()
+        self.assertTrue(res)
+
+        self._set_role("geodb_not_allowed")
+
+        sql = f"SELECT geodb_unpublish_collection('{user_name}_land_use')"
+
+        # noinspection PyUnresolvedReferences
+        with self.assertRaises(psycopg2.errors.InsufficientPrivilege) as e:
+            self._cursor.execute(sql)
+
+        self.assertTrue("permission denied for table geodb_user_databases" in e.exception.pgerror)
+        self.assertEqual('42501', e.exception.pgcode)
 
 

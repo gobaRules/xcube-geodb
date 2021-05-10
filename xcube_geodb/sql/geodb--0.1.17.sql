@@ -546,7 +546,7 @@ BEGIN
         RETURN 'success';
     END IF;
 
-    raise exception '% has not access to the collection ' || collection || '.', usr;
+    raise exception '% has no access to the collection %.', usr, collection;
 END
 $BODY$;
 
@@ -554,7 +554,7 @@ $BODY$;
 
 CREATE OR REPLACE FUNCTION public.geodb_publish_collection(
     collection text)
-    RETURNS void
+    RETURNS bool
     LANGUAGE 'plpgsql'
 
     COST 100
@@ -568,22 +568,23 @@ DECLARE
 BEGIN
     usr := (SELECT geodb_whoami());
 
-    qry := 'SELECT geodb_user_allowed(''' || new_name || ''',''' || usr || ''')';
+    qry := 'SELECT geodb_user_allowed(''' || collection || ''',''' || usr || ''')';
 
     EXECUTE qry INTO allowed;
 
     IF allowed = 1 THEN
         EXECUTE format('GRANT SELECT ON TABLE %I TO PUBLIC;', collection);
+        RETURN true;
     END IF;
 
-    raise exception '% has not access to the collection ' || collection || '.', usr;
+    raise exception '% has no access to the collection %.', usr, collection;
 END
 $BODY$;
 
 
 CREATE OR REPLACE FUNCTION public.geodb_unpublish_collection(
     collection text)
-    RETURNS void
+    RETURNS bool
     LANGUAGE 'plpgsql'
 
     COST 100
@@ -597,33 +598,34 @@ DECLARE
 BEGIN
     usr := (SELECT geodb_whoami());
 
-    qry := 'SELECT geodb_user_allowed(''' || new_name || ''',''' || usr || ''')';
+    qry := 'SELECT geodb_user_allowed(''' || collection || ''',''' || usr || ''')';
 
     EXECUTE qry INTO allowed;
 
     IF allowed = 1 THEN
         EXECUTE format('REVOKE SELECT ON TABLE %I FROM PUBLIC;', collection);
+        RETURN true;
     END IF;
 
-    raise exception '% has not access to the collection ' || collection || '.', usr;
+    raise exception '% has no access to the collection %.', usr, collection;
 END
 $BODY$;
 
 
 -- noinspection SqlSignatureForFile
 
-DO
-$do$
-    BEGIN
-        IF NOT EXISTS(
-                SELECT
-                FROM pg_catalog.pg_roles -- SELECT list can be empty for this
-                WHERE rolname = 'authenticator') THEN
-            CREATE ROLE authenticator NOINHERIT;
-            ALTER ROLE authenticator SET search_path = public;
-        END IF;
-    END
-$do$;
+-- DO
+-- $do$
+--     BEGIN
+--         IF NOT EXISTS(
+--                 SELECT
+--                 FROM pg_catalog.pg_roles -- SELECT list can be empty for this
+--                 WHERE rolname = 'authenticator') THEN
+--             CREATE ROLE authenticator NOINHERIT;
+--             ALTER ROLE authenticator SET search_path = public;
+--         END IF;
+--     END
+-- $do$;
 
 
 DO
