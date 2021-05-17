@@ -30,7 +30,7 @@ TEST_GEOM = "0103000020D20E000001000000110000007593188402B51B4" \
 @requests_mock.mock(real_http=False)
 class GeoDBClientTest(unittest.TestCase):
     def setUp(self) -> None:
-        self._api = GeoDBClient(dotenv_file="tests/envs/.env_test", config_file="tests/.geodb")
+        self._api = GeoDBClient(dotenv_file="tests/envs/.env_ci", config_file="tests/.geodb")
 
         self._server_test_url = self._api._server_url
         self._server_test_port = self._api._server_port
@@ -38,7 +38,7 @@ class GeoDBClientTest(unittest.TestCase):
         if self._server_test_port:
             self._server_full_address += ':' + str(self._server_test_port)
 
-        self._server_test_auth_domain = "https://auth"
+        self._server_test_auth_domain = "https://xcube-users.brockmann-consult.de/api/v2"
 
         os.environ['GEODB_AUTH0_CONFIG_FILE'] = 'ipyauth-auth0-demo_test.env'
         os.environ['GEODB_AUTH0_CONFIG_FOLDER'] = 'tests/envs/'
