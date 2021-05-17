@@ -1,3 +1,4 @@
+import math
 import os
 from datetime import datetime, timedelta
 from typing import Dict, Optional, Union, Sequence, Tuple
@@ -13,6 +14,7 @@ from pathlib import Path
 
 from xcube_geodb.const import MINX, MINY, MAXX, MAXY
 from xcube_geodb.core.collections import Collections
+from xcube_geodb.core.iterator import GeoDBIterator
 from xcube_geodb.core.message import Message
 from xcube_geodb.defaults import GEODB_DEFAULTS
 from xcube_geodb.version import version
@@ -121,6 +123,8 @@ class GeoDBClient(object):
                  config_file: str = str(Path.home()) + '/.geodb',
                  database: Optional[str] = None,
                  access_token_uri: Optional[str] = None):
+
+        self.cache = dict()
         self._dotenv_file = dotenv_file
         self._database = None
         # Access token is set here or on request
@@ -294,7 +298,9 @@ class GeoDBClient(object):
         Returns:
             The current database user
         """
-        return self._whoami or self._get(path='/rpc/geodb_whoami').json()
+        self._whoami = self._get(path='/rpc/geodb_whoami').json() if self._whoami is None else self._whoami
+
+        return self._whoami
 
     @property
     def capabilities(self) -> Dict:
@@ -1403,7 +1409,13 @@ class GeoDBClient(object):
 
     @deprecated_kwarg('namespace', 'database')
     def get_collection(self, collection: str, query: Optional[str] = None, database: Optional[str] = None,
-                       limit: int = None, offset: int = None) -> Union[GeoDataFrame, DataFrame]:
+                       offset: int = None,
+                       limit: int = None,
+                       it_page_size: int = 10,
+                       it_start_page: int = 0,
+                       it_stop_page: int = math.inf,
+                       iterate: bool = False) -> \
+            Union[GeoDataFrame, DataFrame, GeoDBIterator]:
         """
         Query a collection
 
@@ -1411,6 +1423,12 @@ class GeoDBClient(object):
             collection (str): The collection's name
             query (str): A query. Follow the http://postgrest.org/en/v6.0/api.html query convention.
             database (str): The name of the database the collection resides in [current database]
+            offset (int): Offset to be used when querying
+            limit (int): limit to be used when querying
+            it_page_size (int): The number of rows returned per page when iterating (overrides offset) [10]
+            it_stop_page (int): The last page to be returned when iterating [inf]
+            it_start_page (int): The first page to be returned when iterating (overrides offset) [0]
+            iterate (bool): Whether to iterate over the dataset (consider setting it_* options) [False]
 
         Returns:
             GeoDataFrame or DataFrame: results
@@ -1424,17 +1442,30 @@ class GeoDBClient(object):
 
         """
 
+        if iterate is True:
+            return GeoDBIterator(
+                geodb=self,
+                func="get_collection",
+                page_size=it_page_size,
+                start_page=it_start_page,
+                stop_page=it_stop_page,
+                kwargs=dict(collection=collection, query=query, database=database)
+            )
+
         srid = self.get_collection_srid(collection=collection, database=database)
 
         tab_prefix = database or self.database
         dn = f"{tab_prefix}_{collection}"
 
-        # self._raise_for_collection_exists(collection=dn)
+        query = query or 'id>-1'
 
-        if query:
-            r = self._get(f"/{dn}?{query}")
-        else:
-            r = self._get(f"/{dn}")
+        if limit is not None:
+            query += f"&limit={limit}"
+
+        if offset is not None:
+            query += f"&offset={offset}"
+
+        r = self._get(f"/{dn}?{query}")
 
         js = r.json()
 
@@ -1540,7 +1571,36 @@ class GeoDBClient(object):
         tab_prefix = database or self.database
         dn = f"{tab_prefix}_{collection}"
 
+        if dn in self.cache:
+            return self.cache[dn]
+
         r = self._post(path='/rpc/geodb_get_collection_srid', payload={'collection': dn}, raise_for_status=False)
+        if r.status_code == 200:
+            js = r.json()[0]['src'][0]
+
+            if js:
+                self.cache[dn] = js['srid']
+                return js['srid']
+
+        return None
+
+    def set_collection_srid(self, collection: str, crs: int, database: Optional[str] = None) -> Optional[str]:
+        """
+        Get the SRID of a collection
+
+        Args:
+            collection (str): The collection's name
+            crs (int): new crs
+            database (str): The name of the database the collection resides in [current database]
+
+        Returns:
+            The name of the SRID
+        """
+        tab_prefix = database or self.database
+        dn = f"{tab_prefix}_{collection}"
+
+        r = self._post(path='/rpc/geodb_set_collection_srid', payload={'collection': dn, 'srid': crs},
+                       raise_for_status=False)
         if r.status_code == 200:
             js = r.json()[0]['src'][0]
 

@@ -28,6 +28,7 @@ install:
   - make install;
   - cd ../..;
   - python setup.py install
+  - cp tests/envs/.env_ci tests/envs/.env
 
 build_script:
   - for f in xcube_geodb/sql/*.sql;
